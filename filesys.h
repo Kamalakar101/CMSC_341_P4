@@ -114,6 +114,13 @@ class FileSys{
     //private helper functions
     bool isPrime(int number);
     int findNextPrime(int current);
+    int quadraticProbing(int hashIndex, int capacity, File ** table, string name="", int block=0, bool toFindItem=false) const;
+    int doubleHashing(int hashIndex, int capacity, File ** table, string name="", int block=0, bool toFindItem=false) const;
+    int linearProbing(int hashIndex, int capacity, File ** table, string name="", int block=0, bool toFindItem=false) const;
+    int findFileIndex(int hashIndex, int capacity, File ** table, prob_t policy, string name, int block) const;
+    int checkForFileInOld(string name, int block) const;
+    int checkForFileInCurrent(string name, int block) const;
+    void rehash();
 
     /******************************************
     * Private function declarations go here! *
