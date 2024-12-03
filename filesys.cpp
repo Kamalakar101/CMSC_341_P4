@@ -11,20 +11,25 @@ FileSys::FileSys(int size, hash_fn hash, prob_t probing = DEFPOLCY) {
     else if (size < MINPRIME) {
         m_currentCap = MINPRIME;
     }
-
     //If the size is not prime, it finds the next smallest prime greater than the size
-    if (!isPrime(size)) {
-        m_currentCap = findNextPrime(size);
+    else if (isPrime(size)) {
+        m_currentCap = size;
     }
     //Makes the size as the capacity
     else {
-        m_currentCap = size;
+        m_currentCap = findNextPrime(size);
     }
     
     //Initializes the hash table and member variables
     m_hash = hash;
     m_currProbing = probing;
-    m_currentTable = new File*[m_currentCap];
+    m_currentTable = new File*[m_currentCap]();
+    m_currNumDeleted = 0;
+    m_currentSize = 0;
+    m_oldCap = 0;
+    m_oldNumDeleted = 0;
+    m_oldSize = 0;
+    m_oldTable = nullptr;
     m_newPolicy = probing;
     m_transferIndex = 0;
 }
@@ -68,13 +73,13 @@ bool FileSys::insert(File file){
     //Collision handling
     //Aquires the index based on the probing policy of the current table
     else if (m_currProbing == QUADRATIC) {
-        index = quadraticProbing(hashIndex, m_currentCap, m_currentTable);
+        index = quadraticProbing(hashIndex, m_currentCap, m_currentTable, file.m_name);
     }
     else if (m_currProbing == DOUBLEHASH) {
-        index = doubleHashing(hashIndex, m_currentCap, m_currentTable);
+        index = doubleHashing(hashIndex, m_currentCap, m_currentTable, file.m_name);
     }
     else if (m_currProbing == LINEAR) {
-        index = linearProbing(hashIndex, m_currentCap, m_currentTable);
+        index = linearProbing(hashIndex, m_currentCap, m_currentTable, file.m_name);
     }
 
     //Inserts if the index is valid
@@ -85,11 +90,8 @@ bool FileSys::insert(File file){
         m_currentSize++;
         isInserted = true;
     }
-
-    //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent
-    if (lambda() > 0.5 || deletedRatio() > 0.8) {
-        rehash();
-    }
+    //Checks if a rehash is possible
+    checkForRehash();
     return isInserted;
 }
 
@@ -112,11 +114,8 @@ bool FileSys::remove(File file){
         m_currNumDeleted++;
         isTagged = true;
     }
-
-    //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent
-    if (lambda() > 0.5 || deletedRatio() > 0.8) {
-        rehash();
-    }
+    //Checks if a rehash is possible
+    checkForRehash();
     return isTagged;
 }
 
@@ -131,7 +130,7 @@ const File FileSys::getFile(string name, int block) const {
         return *m_oldTable[oldIndex];
     }
     //Returns the file from the current table (if found)
-    else if (currIndex != 1 && m_currentTable[currIndex]->m_used == true) {
+    else if (currIndex != -1 && m_currentTable[currIndex]->m_used == true) {
         return *m_currentTable[currIndex];
     }
     return File();
@@ -139,25 +138,29 @@ const File FileSys::getFile(string name, int block) const {
 
 //updateDiskBlock()
 bool FileSys::updateDiskBlock(File file, int block) {
-    //Checks for the index of the file in the old and current tables
-    int currIndex = checkForFileInCurrent(file.m_name, file.m_diskBlock);
-    int oldIndex = checkForFileInOld(file.m_name, file.m_diskBlock);
-    //Updates the file's diskBlock from the old table (if found)
-    if (oldIndex != -1) {
-        m_oldTable[oldIndex]->m_diskBlock = block;
-        return true;
-    }
-    //Updates the file's diskBlock from the current table (if found)
-    else if (currIndex != 1) {
-        m_currentTable[currIndex]->m_diskBlock = block;
-        return true;
+    //Attempts to update only if block is within DISKMIN and DISKMAX
+    if (!(block < DISKMIN || block > DISKMAX)) {
+        //Checks for the index of the file in the old and current tables
+        int currIndex = checkForFileInCurrent(file.m_name, file.m_diskBlock);
+        int oldIndex = checkForFileInOld(file.m_name, file.m_diskBlock);
+
+        //Updates the file's diskBlock from the old table (if found)
+        if (oldIndex != -1) {
+            m_oldTable[oldIndex]->m_diskBlock = block;
+            return true;
+        }
+        //Updates the file's diskBlock from the current table (if found)
+        else if (currIndex != 1) {
+            m_currentTable[currIndex]->m_diskBlock = block;
+            return true;
+        }
     }
     return false;
 }
 
 //lambda()
 float FileSys::lambda() const {
-    return (float) m_currentSize / m_currentSize;
+    return (float) m_currentSize / m_currentCap;
 }
 
 //deletedRatio()
@@ -211,11 +214,10 @@ int FileSys::findNextPrime(int current){
 
 //quadraticProbing()
 int FileSys::quadraticProbing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
-    int index = 0;
     //Loops until the capacity of the table is reached
     for (int i = 0; i < capacity; i++) {
         //calculates index
-        index = (hashIndex + i * i) % capacity;
+        unsigned int index = (hashIndex + i * i) % capacity;
         //Returns the index if a file is found (purpose of retrieving the index of a file)
         if (toFindItem == true && table[index] != nullptr && table[index]->m_used == true && table[index]->m_name == name && table[index]->m_diskBlock == block) {
             return index;
@@ -230,11 +232,10 @@ int FileSys::quadraticProbing(int hashIndex, int capacity, File ** table, string
 
 //doubleHashing()
 int FileSys::doubleHashing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
-    int index = 0;
     //Loops until the capacity of the table is reached
     for (int i = 0; i < capacity; i++) {
         //calculates index
-        index = (hashIndex + (11 - (hashIndex % 11)) * i) % capacity;
+        int index = ((m_hash(name) % 101) + i * (11 - (m_hash(name) % 11))) % 101;
         //Returns the index if a file is found (purpose of retrieving the index of a file)
         if (toFindItem == true && table[index] != nullptr && table[index]->m_used == true && table[index]->m_name == name && table[index]->m_diskBlock == block) {
             return index;
@@ -249,11 +250,10 @@ int FileSys::doubleHashing(int hashIndex, int capacity, File ** table, string na
 
 //linearProbing()
 int FileSys::linearProbing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
-    int index = 0;
     //Loops until the capacity of the table is reached
     for (int i = 1; i < capacity; i++) {
         //calculates index
-        index = (hashIndex + i) % capacity;
+        int index = (hashIndex + i) % capacity;
         //Returns the index if a file is found (purpose of retrieving the index of a file)
         if (toFindItem == true && table[index] != nullptr && table[index]->m_used == true && table[index]->m_name == name && table[index]->m_diskBlock == block) {
             return index;
@@ -268,8 +268,8 @@ int FileSys::linearProbing(int hashIndex, int capacity, File ** table, string na
 
 //findFileIndex()
 int FileSys::findFileIndex(int hashIndex, int capacity, File **table, prob_t policy, string name, int block) const {
-    //If the hashIndex is available
-    if (table[hashIndex] != nullptr && table[hashIndex]->m_name == name && table[hashIndex]->m_diskBlock == block) {
+    //If the hashIndex has the file
+    if (table[hashIndex] != nullptr && (table[hashIndex]->m_name == name) && table[hashIndex]->m_diskBlock == block) {
         return hashIndex;
     }
     //Searching via probing policy and returns the returned index
@@ -299,6 +299,14 @@ int FileSys::checkForFileInCurrent(string name, int block) const {
     return findFileIndex((m_hash(name) % m_currentCap), m_currentCap, m_currentTable, m_currProbing, name, block);
 }
 
+//checkForRehash()
+void FileSys::checkForRehash() {
+    //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent
+    if (lambda() > 0.5f || deletedRatio() > 0.8f) {
+        rehash();
+    }
+}
+
 //rehash()
 void FileSys::rehash() {
     //Starts a new rehash if transferIndex is 0
@@ -311,8 +319,9 @@ void FileSys::rehash() {
         m_oldTable = m_currentTable;
 
         //Initializes a new table
-        m_currentCap = findNextPrime((m_currentSize - m_currNumDeleted) * 4);
-        m_currentTable = m_currentTable = new File*[m_currentCap];
+        int size = (m_currentSize - m_currNumDeleted) * 4;
+        m_currentCap = findNextPrime(size);
+        m_currentTable = new File*[m_currentCap]();
         m_currentSize = 0;
         m_currNumDeleted = 0;
         //If there is a new policy request
@@ -321,22 +330,19 @@ void FileSys::rehash() {
         }
     }
     int oldTransferIndex = m_transferIndex;
-    //Attempts to loop through all of the old table
-    for (m_transferIndex; m_transferIndex < m_oldCap; m_transferIndex++) {
-        //Breaks if progressed 25% 
-        if (floor((m_transferIndex - oldTransferIndex) * 100 / m_currentCap) == 25) {
-            break;
-        }
+    //Attempts to loop through all of the old table until 25% progress has been made or the whole table has been scanned
+    while ((((m_transferIndex - oldTransferIndex) * 100 / m_oldCap) != 25) && m_transferIndex < m_oldCap) {
         //Transfers any live nodes to the current table by insertion
-        else if (m_oldTable[m_transferIndex] != nullptr && m_oldTable[m_transferIndex]->m_used == true) {
+        if (m_oldTable[m_transferIndex] != nullptr && m_oldTable[m_transferIndex]->m_used == true) {
             insert(*m_oldTable[m_transferIndex]);
             m_oldTable[m_transferIndex]->m_used = false;
             m_oldNumDeleted++;
         }
+        m_transferIndex++;
     }
 
     //When the transfer process has gone through the whole table
-    if (m_transferIndex + 1 == m_oldCap) {
+    if (m_transferIndex == m_oldCap) {
         //Deallocates the old table
         for (int i = 0; i < m_oldCap; i++) {
             delete m_oldTable[i];
@@ -344,8 +350,10 @@ void FileSys::rehash() {
         delete[] m_oldTable;
 
         //Sets old member variables to default values
+        m_transferIndex = 0;
         m_oldCap = 0;
         m_oldNumDeleted = 0;
         m_oldSize = 0;
+        m_oldTable = nullptr;
     }
 }

@@ -120,6 +120,7 @@ class FileSys{
     int findFileIndex(int hashIndex, int capacity, File ** table, prob_t policy, string name, int block) const;
     int checkForFileInOld(string name, int block) const;
     int checkForFileInCurrent(string name, int block) const;
+    void checkForRehash();
     void rehash();
 
     /******************************************
