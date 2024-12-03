@@ -323,7 +323,7 @@ void FileSys::rehash() {
     }
     int oldTransferIndex = m_transferIndex;
     //Attempts to loop through all of the old table until 25% progress has been made or the whole table has been scanned
-    while ((((m_transferIndex - oldTransferIndex) * 100 / m_oldCap) != 25) && m_transferIndex < m_oldCap) {
+    while ( m_transferIndex < m_oldCap && (((m_transferIndex - oldTransferIndex) * 100 / m_oldCap) != 25)) {
         //Transfers any live nodes to the current table by insertion
         if (m_oldTable[m_transferIndex] != nullptr && m_oldTable[m_transferIndex]->m_used == true) {
             insert(*m_oldTable[m_transferIndex]);
