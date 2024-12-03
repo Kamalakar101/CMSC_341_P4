@@ -1,8 +1,8 @@
 CXX = g++
 CXXFLAGS = -Wall -g
 
-proj4: filesys.o driver.cpp
-		$(CXX) $(CXXFLAGS) filesys.o driver.cpp -o proj4
+proj4: filesys.o mytest.cpp
+		$(CXX) $(CXXFLAGS) filesys.o mytest.cpp -o proj4
 
 filesys.o: filesys.cpp  filesys.h
 		$(CXX) $(CXXFLAGS) -c filesys.cpp

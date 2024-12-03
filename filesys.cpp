@@ -3,16 +3,8 @@
 
 //Constructor
 FileSys::FileSys(int size, hash_fn hash, prob_t probing = DEFPOLCY) {
-    //If size is greater than MAXPRIME, then the capacity becomes MAXPRIME
-    if (size > MAXPRIME) {
-        m_currentCap = MAXPRIME;
-    }
-    //If size is less than MINPRIME, then the capacity becomes MINPRIME
-    else if (size < MINPRIME) {
-        m_currentCap = MINPRIME;
-    }
     //If the size is not prime, it finds the next smallest prime greater than the size
-    else if (isPrime(size)) {
+    if (isPrime(size)) {
         m_currentCap = size;
     }
     //Makes the size as the capacity
@@ -109,7 +101,7 @@ bool FileSys::remove(File file){
         isTagged = true;
     }
     //Tags the file as deleted if found in the current table
-    else if (currIndex != 1) {
+    else if (currIndex != -1) {
         m_currentTable[currIndex]->m_used = false;
         m_currNumDeleted++;
         isTagged = true;
@@ -302,7 +294,7 @@ int FileSys::checkForFileInCurrent(string name, int block) const {
 //checkForRehash()
 void FileSys::checkForRehash() {
     //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent
-    if (lambda() > 0.5f || deletedRatio() > 0.8f) {
+    if (lambda() > 0.5f || deletedRatio() > 0.8f || m_transferIndex != 0) {
         rehash();
     }
 }
