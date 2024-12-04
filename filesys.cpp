@@ -52,6 +52,7 @@ void FileSys::changeProbPolicy(prob_t policy){
 bool FileSys::insert(File file){
     int hashIndex = m_hash(file.m_name) % m_currentCap;
     int index = -1;
+    bool isNewFile = file.m_used;
     bool isInserted = false;
 
     //If file has an invalid disblock number or is a duplicate
@@ -78,12 +79,17 @@ bool FileSys::insert(File file){
     if (index != -1) {
         //Inserts the file
         delete m_currentTable[index];
+        file.m_used = true;
         m_currentTable[index] = new File(file);
         m_currentSize++;
         isInserted = true;
     }
-    //Checks if a rehash is possible
-    checkForRehash();
+    
+    //Makes sure the file was not from the old table
+    if (isNewFile) {
+        //Checks if a rehash is possible
+        checkForRehash();
+    }
     return isInserted;
 }
 
@@ -311,8 +317,7 @@ void FileSys::rehash() {
         m_oldTable = m_currentTable;
 
         //Initializes a new table
-        int size = (m_currentSize - m_currNumDeleted) * 4;
-        m_currentCap = findNextPrime(size);
+        m_currentCap = findNextPrime((m_currentSize - m_currNumDeleted) * 4);
         m_currentTable = new File*[m_currentCap]();
         m_currentSize = 0;
         m_currNumDeleted = 0;
@@ -321,20 +326,23 @@ void FileSys::rehash() {
             m_currProbing = m_newPolicy;
         }
     }
-    int oldTransferIndex = m_transferIndex;
+    
     //Attempts to loop through all of the old table until 25% progress has been made or the whole table has been scanned
-    while ( m_transferIndex < m_oldCap && (((m_transferIndex - oldTransferIndex) * 100 / m_oldCap) != 25)) {
+    for (int i = 0; i < ((m_oldCap / 4) + 1); i++) {
+        if (m_transferIndex == m_oldCap) {
+            break;
+        }
         //Transfers any live nodes to the current table by insertion
-        if (m_oldTable[m_transferIndex] != nullptr && m_oldTable[m_transferIndex]->m_used == true) {
-            insert(*m_oldTable[m_transferIndex]);
-            m_oldTable[m_transferIndex]->m_used = false;
+        else if ((m_transferIndex + i) < m_oldCap && m_oldTable[m_transferIndex + i] != nullptr && m_oldTable[m_transferIndex + i]->m_used == true) {
+            m_oldTable[m_transferIndex + i]->m_used = false;
+            insert(*m_oldTable[m_transferIndex + i]);
             m_oldNumDeleted++;
         }
-        m_transferIndex++;
     }
+    m_transferIndex += (m_oldCap / 4);
 
     //When the transfer process has gone through the whole table
-    if (m_transferIndex == m_oldCap) {
+    if (m_transferIndex >= m_oldCap) {
         //Deallocates the old table
         for (int i = 0; i < m_oldCap; i++) {
             delete m_oldTable[i];

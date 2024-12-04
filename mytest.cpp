@@ -152,9 +152,9 @@ class Tester{
         bool testRemoveNonColliding(vector<File> &nonCollidingFiles, prob_t policy);
         bool testRemoveColliding(vector<File> &collidingFiles, prob_t policy);
         bool testTriggerRehashDataInsertion(vector<File> &nonCollidingFiles, prob_t policy);
-        bool testRehashCompletionLoadFactor();
-        bool testTriggerRehashDataRemoval();
-        bool testRehashCompletionDeleteRatio();
+        bool testRehashCompletionLoadFactor(vector<File> &files, prob_t policy);
+        bool testTriggerRehashDataRemoval(vector<File> &nonCollidingFiles, prob_t policy);
+        bool testRehashCompletionDeleteRatio(vector<File> &nonCollidingFiles, prob_t policy);
 };
 
 int main() {
@@ -258,6 +258,39 @@ int main() {
     }
     cout << endl;
 
+    //*********************** REHASH COMPLETION LOAD FACTOR ***********************
+    cout << "*********************** REHASH COMPLETION LOAD FACTOR ***********************" << endl;
+    cout << "Rehash Completion Load Factor: ";
+    if(test.testRehashCompletionLoadFactor(collidingFiles, QUADRATIC) && test.testRehashCompletionLoadFactor(collidingFiles, DOUBLEHASH) && test.testRehashCompletionLoadFactor(collidingFiles, LINEAR)) {
+        cout << "Rehash Completed! (PASSED)" << endl;
+    }
+    else {
+        cout << "Rehash Not Completed! (FAILED)" << endl;
+    }
+    cout << endl;
+
+    //*********************** TRIGGER REHASH DATA REMOVAL ***********************
+    cout << "*********************** TRIGGER REHASH DATA REMOVAL ***********************" << endl;
+    cout << "Trigger Rehash Data Removal: ";
+    if(test.testTriggerRehashDataRemoval(nonCollidingFiles, QUADRATIC) && test.testTriggerRehashDataRemoval(nonCollidingFiles, DOUBLEHASH) && test.testTriggerRehashDataRemoval(nonCollidingFiles, LINEAR)) {
+        cout << "Triggered Rehash! (PASSED)" << endl;
+    }
+    else {
+        cout << "Rehash Did Not Trigger! (FAILED)" << endl;
+    }
+    cout << endl;
+
+    //*********************** REHASH COMPLETION DELETE RATIO ***********************
+    cout << "*********************** REHASH COMPLETION DELETE RATIO ***********************" << endl;
+    cout << "Rehash Completion Delete Ratio: ";
+    if(test.testRehashCompletionDeleteRatio(nonCollidingFiles, QUADRATIC) && test.testRehashCompletionDeleteRatio(nonCollidingFiles, DOUBLEHASH) && test.testRehashCompletionDeleteRatio(nonCollidingFiles, LINEAR)) {
+        cout << "Rehash Completed! (PASSED)" << endl;
+    }
+    else {
+        cout << "Rehash Not Completed! (FAILED)" << endl;
+    }
+    cout << endl;
+
     return 0;
 }
 
@@ -347,9 +380,66 @@ bool Tester::testTriggerRehashDataInsertion(vector<File> &nonCollidingFiles, pro
         database.insert(nonCollidingFiles.at(i));
     }
 
+    if (table != database.m_currentTable && database.m_transferIndex != 0 && database.m_currentCap > MINPRIME) {
+        return true;
+    }
+    return false;
+}
+
+bool Tester::testRehashCompletionLoadFactor(vector<File> &files, prob_t policy) {
+    FileSys database(MINPRIME, hashCode, policy);
+    bool allFilesFound = false;
+    for (int i = 0; i < 60; i++) {
+        database.insert(files.at(i));
+    }
+
+    for (int i = 0; i < (int) files.size(); i++) {
+        if (database.getFile(files.at(i).m_name, files.at(i).m_diskBlock) == files.at(i)) {
+            allFilesFound = true;
+        }
+    }
+
+    if (database.m_oldTable == nullptr && database.m_transferIndex == 0 && database.m_currentCap > MINPRIME && allFilesFound) {
+        return true;
+    }
+    return false;
+}
+
+bool Tester::testTriggerRehashDataRemoval(vector<File> &nonCollidingFiles, prob_t policy) {
+    FileSys database(MINPRIME, hashCode, policy);
+    File ** table = database.m_currentTable;
+    for (int i = 0; i < 50; i++) {
+        database.insert(nonCollidingFiles.at(i));
+    }
+
+    for (int i = 0; i < 41; i++) {
+        database.remove(nonCollidingFiles.at(i));
+    }
+
     if (table != database.m_currentTable && database.m_transferIndex != 0) {
-        database.dump(); 
-        cout << database.m_transferIndex << endl;
+        return true;
+    }
+    return false;
+}
+
+bool Tester::testRehashCompletionDeleteRatio(vector<File> &nonCollidingFiles, prob_t policy) {
+    FileSys database(MINPRIME, hashCode, policy);
+    bool allFilesFound = false;
+    for (int i = 0; i < 50; i++) {
+        database.insert(nonCollidingFiles.at(i));
+    }
+
+    for (int i = 0; i < 45; i++) {
+        database.remove(nonCollidingFiles.at(i));
+    }
+
+    for (int i = 45; i < 50; i++) {
+        if (database.getFile(nonCollidingFiles.at(i).m_name, nonCollidingFiles.at(i).m_diskBlock) == nonCollidingFiles.at(i)) {
+            allFilesFound = true;
+        }
+    }
+
+    if (database.m_oldTable == nullptr && database.m_transferIndex == 0 && allFilesFound) {
         return true;
     }
     return false;
