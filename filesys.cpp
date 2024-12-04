@@ -2,6 +2,7 @@
 #include "filesys.h"
 
 //Constructor
+//Makes a FileSys object
 FileSys::FileSys(int size, hash_fn hash, prob_t probing = DEFPOLCY) {
     //If the size is not prime, it finds the next smallest prime greater than the size
     if (isPrime(size)) {
@@ -27,6 +28,7 @@ FileSys::FileSys(int size, hash_fn hash, prob_t probing = DEFPOLCY) {
 }
 
 //Destructor
+//Deallocates the tables
 FileSys::~FileSys(){
     //Deallocates the current table
     for (int i = 0; i < m_currentCap; i++) {
@@ -44,11 +46,13 @@ FileSys::~FileSys(){
 }
 
 //changeProbPolicy()
+//Stores the user's request for the new policy
 void FileSys::changeProbPolicy(prob_t policy){
     m_newPolicy = policy;
 }
 
 //insert()
+//Inserts the file into the current table
 bool FileSys::insert(File file){
     int hashIndex = m_hash(file.m_name) % m_currentCap;
     int index = -1;
@@ -94,6 +98,7 @@ bool FileSys::insert(File file){
 }
 
 //remove()
+//Tags the file for deletion in either the old or current table
 bool FileSys::remove(File file){
     //Checks for the index of the file in the old and current tables
     int currIndex = checkForFileInCurrent(file.m_name, file.m_diskBlock);
@@ -118,6 +123,7 @@ bool FileSys::remove(File file){
 }
 
 //getFile()
+//Returns the file if found and an empty file if not
 const File FileSys::getFile(string name, int block) const {
     //Checks for the index of the file in the old and current tables
     int currIndex = checkForFileInCurrent(name, block);
@@ -135,6 +141,7 @@ const File FileSys::getFile(string name, int block) const {
 }
 
 //updateDiskBlock()
+//Updates a file's diskBlock
 bool FileSys::updateDiskBlock(File file, int block) {
     //Attempts to update only if block is within DISKMIN and DISKMAX
     if (!(block < DISKMIN || block > DISKMAX)) {
@@ -157,16 +164,19 @@ bool FileSys::updateDiskBlock(File file, int block) {
 }
 
 //lambda()
+//Returns the load factor
 float FileSys::lambda() const {
     return (float) m_currentSize / m_currentCap;
 }
 
 //deletedRatio()
+//Returns the deletedRatio
 float FileSys::deletedRatio() const {
     return (float) m_currNumDeleted / m_currentSize;
 }
 
 //dump()
+//Outputs the Hash Table
 void FileSys::dump() const {
     cout << "Dump for the current table: " << endl;
     if (m_currentTable != nullptr)
@@ -181,6 +191,7 @@ void FileSys::dump() const {
 }
 
 //isPrime()
+//Checks if a number is a prime number
 bool FileSys::isPrime(int number){
     bool result = true;
     for (int i = 2; i <= number / 2; ++i) {
@@ -193,6 +204,7 @@ bool FileSys::isPrime(int number){
 }
 
 //findNextPrime
+//Finds the next biggest prime number
 int FileSys::findNextPrime(int current){
     //we always stay within the range [MINPRIME-MAXPRIME]
     //the smallest prime starts at MINPRIME
@@ -211,6 +223,7 @@ int FileSys::findNextPrime(int current){
 }
 
 //quadraticProbing()
+//Searches for and returns an index using quadratic probing
 int FileSys::quadraticProbing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
     //Loops until the capacity of the table is reached
     for (int i = 0; i < capacity; i++) {
@@ -229,6 +242,7 @@ int FileSys::quadraticProbing(int hashIndex, int capacity, File ** table, string
 }
 
 //doubleHashing()
+//Searches for and returns an index using double hashing
 int FileSys::doubleHashing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
     //Loops until the capacity of the table is reached
     for (int i = 0; i < capacity; i++) {
@@ -247,6 +261,7 @@ int FileSys::doubleHashing(int hashIndex, int capacity, File ** table, string na
 }
 
 //linearProbing()
+//Searches for and returns an index using linear probing
 int FileSys::linearProbing(int hashIndex, int capacity, File ** table, string name, int block, bool toFindItem) const {
     //Loops until the capacity of the table is reached
     for (int i = 1; i < capacity; i++) {
@@ -265,6 +280,7 @@ int FileSys::linearProbing(int hashIndex, int capacity, File ** table, string na
 }
 
 //findFileIndex()
+//Returns the index of a file
 int FileSys::findFileIndex(int hashIndex, int capacity, File **table, prob_t policy, string name, int block) const {
     //If the hashIndex has the file
     if (table[hashIndex] != nullptr && (table[hashIndex]->m_name == name) && table[hashIndex]->m_diskBlock == block) {
@@ -284,6 +300,7 @@ int FileSys::findFileIndex(int hashIndex, int capacity, File **table, prob_t pol
 }
 
 //checkForFileInOld()
+//Checks for a file in the old table and returns an index if found
 int FileSys::checkForFileInOld(string name, int block) const {
     //Returns an invalid index if there is no old table
     if (m_oldTable == nullptr) {
@@ -293,19 +310,22 @@ int FileSys::checkForFileInOld(string name, int block) const {
 }
 
 //checkForFileInCurrent()
+//Checks for a file in the current table and returns an index if found
 int FileSys::checkForFileInCurrent(string name, int block) const {
     return findFileIndex((m_hash(name) % m_currentCap), m_currentCap, m_currentTable, m_currProbing, name, block);
 }
 
 //checkForRehash()
+//Rehashes if certain criteria is met
 void FileSys::checkForRehash() {
-    //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent
+    //If load factor is greater than 50 percent or deleted ratio is greater than 80 percent or there is a rehash in progress
     if (lambda() > 0.5f || deletedRatio() > 0.8f || m_transferIndex != 0) {
         rehash();
     }
 }
 
 //rehash()
+//Flips current to old and rehashes old files into a new current table
 void FileSys::rehash() {
     //Starts a new rehash if transferIndex is 0
     if (m_transferIndex == 0) {
